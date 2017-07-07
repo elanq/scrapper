@@ -5,7 +5,9 @@ require 'pry'
 require 'prawn'
 
 links = ARGV
+threads = []
 user_replies = []
+line = 50.times.map{ "#" }.join + "\n"
 
 # scrap data from given reddit urls
 links.each do |link|
@@ -15,6 +17,7 @@ links.each do |link|
     if response.ok? || response.success?
       json_response = JSON.parse(response.body, symbolize_names: true)
       # first response is always thread starter
+      thread = json_response.first[:data][:children].first
       # we only need the thread replies for this case
       replies = json_response.last[:data][:children]
 
@@ -31,18 +34,24 @@ links.each do |link|
       end
 
       user_replies.sort_by{|r| r[:ups]}.reverse!
+      title = thread[:data][:title][0..30].gsub(/\s\w+\s*$/, '...')
+      thread_data = {
+        thread_name: thread[:data][:title],
+        data: user_replies,
+        filename: "#{thread[:data][:author]}-#{title}.pdf"
+      }
+      threads.push(thread_data)
     end
   end
 end
 
-# save scrapped data to txt file
-filename = "reddit-scrap-#{Time.now.to_time.to_i}.pdf"
-line = 50.times.map{ "#" }.join + "\n"
-
-Prawn::Document.generate(filename) do
-  user_replies.each do |reply|
-    text "Author : #{reply[:author]} \n"
-    text "#{reply[:body]} \n"
-    text line
+threads.each do |t|
+  Prawn::Document.generate(t[:filename]) do
+    t[:data].each do |reply|
+      text "Author : #{reply[:author]} \n"
+      text "#{reply[:body]} \n"
+      text line
+    end
   end
+  puts "#{t[:filename]} successfully generated"
 end
