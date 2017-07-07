@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+
+require 'httparty'
+require 'pry'
+require 'prawn'
+
+links = ARGV
+user_replies = []
+
+# scrap data from given reddit urls
+links.each do |link|
+  if link =~ /reddit.com/i
+    response = HTTParty.get(link)
+    # only handle successful request
+    if response.ok? || response.success?
+      json_response = JSON.parse(response.body, symbolize_names: true)
+      # first response is always thread starter
+      # we only need the thread replies for this case
+      replies = json_response.last[:data][:children]
+
+      replies.each do |reply|
+        next if reply[:data][:author].nil?
+        reply_data = reply[:data]
+        data = {
+          author: reply_data[:author],
+          body: reply_data[:body],
+          body_html: reply_data[:body_html],
+          ups: reply_data[:ups] || 0
+        }
+        user_replies.push(data)
+      end
+
+      user_replies.sort_by{|r| r[:ups]}.reverse!
+    end
+  end
+end
+
+# save scrapped data to txt file
+filename = "reddit-scrap-#{Time.now.to_time.to_i}.pdf"
+line = 50.times.map{ "#" }.join + "\n"
+
+Prawn::Document.generate(filename) do
+  user_replies.each do |reply|
+    text "Author : #{reply[:author]} \n"
+    text "#{reply[:body]} \n"
+    text line
+  end
+end
