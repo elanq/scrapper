@@ -8,10 +8,11 @@ links = ARGV
 threads = []
 user_replies = []
 line = 50.times.map{ "#" }.join + "\n"
+link_validation = /\b(reddit.com\/r\/|comments\/)/
 
 # scrap data from given reddit urls
 links.each do |link|
-  if link =~ /reddit.com/i
+  if link.scan(link_validation).size
     response = HTTParty.get(link)
     # only handle successful request
     if response.ok? || response.success?
@@ -21,6 +22,7 @@ links.each do |link|
       # we only need the thread replies for this case
       replies = json_response.last[:data][:children]
 
+      # iterate reply of users. put them into map
       replies.each do |reply|
         next if reply[:data][:author].nil?
         reply_data = reply[:data]
@@ -33,7 +35,10 @@ links.each do |link|
         user_replies.push(data)
       end
 
+      # sort by number of upvote
       user_replies.sort_by{|r| r[:ups]}.reverse!
+
+      # set thread data
       title = thread[:data][:title][0..30].gsub(/\s\w+\s*$/, '...')
       thread_data = {
         thread_name: thread[:data][:title],
@@ -45,6 +50,7 @@ links.each do |link|
   end
 end
 
+# generate each link into pdf file
 threads.each do |t|
   Prawn::Document.generate(t[:filename]) do
     t[:data].each do |reply|
