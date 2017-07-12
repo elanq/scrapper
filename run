@@ -9,11 +9,15 @@ threads = []
 user_replies = []
 line = 50.times.map{ "#" }.join + "\n"
 link_validation = /\b(reddit.com\/r\/|comments\/)/
-
 # scrap data from given reddit urls
 links.each do |link|
-  if link.scan(link_validation).size
-    response = HTTParty.get(link)
+  if link.scan(link_validation).size > 1 
+    begin
+      response = HTTParty.get(link)
+    rescue SocketError => e
+      puts "error connecting to reddit server"
+      break
+    end
     # only handle successful request
     if response.ok? || response.success?
       json_response = JSON.parse(response.body, symbolize_names: true)
@@ -46,6 +50,9 @@ links.each do |link|
         filename: "#{thread[:data][:author]}-#{title}.pdf"
       }
       threads.push(thread_data)
+    else 
+      puts "error fetching data form link"
+      puts "response string : #{response.to_s}"
     end
   end
 end
@@ -53,10 +60,17 @@ end
 # generate each link into pdf file
 threads.each do |t|
   Prawn::Document.generate(t[:filename]) do
+    font "/System/Library/Fonts/Helvetica.dfont"
+    # opening page
+    text t[:thread_name], valign: :center, align: :center
+    start_new_page
+
+    #content page
     t[:data].each do |reply|
+      next if reply[:body] == "[deleted]"
       text "Author : #{reply[:author]} \n"
       text "#{reply[:body]} \n"
-      text line
+      start_new_page
     end
   end
   puts "#{t[:filename]} successfully generated"
